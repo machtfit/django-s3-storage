@@ -4,6 +4,7 @@ import mimetypes
 import os
 import posixpath
 import shutil
+import threading
 from contextlib import closing
 from datetime import timezone
 from functools import wraps, partial
@@ -122,6 +123,16 @@ class _Local(local):
         ), **connection_kwargs)
 
 
+class ConnectionManager:
+    def get_connection(self, obj):
+        if not hasattr(threading.current_thread(), "connection"):
+            threading.current_thread().connection = _Local(obj)
+        return threading.current_thread().connection
+
+
+connection_manager = ConnectionManager()
+
+
 @deconstructible
 class S3Storage(Storage):
 
@@ -185,7 +196,7 @@ class S3Storage(Storage):
         if not self.settings.AWS_S3_BUCKET_NAME:
             raise ImproperlyConfigured(f"Setting AWS_S3_BUCKET_NAME{self.s3_settings_suffix} is required.")
         # Create a thread-local connection manager.
-        self._connections = _Local(self)
+        self._connections = connection_manager.get_connection(self)
         # Set transfer config for S3 operations
         self._transfer_config = TransferConfig(use_threads=self.settings.AWS_S3_USE_THREADS)
 
